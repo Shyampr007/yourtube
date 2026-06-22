@@ -22,7 +22,7 @@ export const sendInvoiceEmail = async (recipientEmail, userName, planDetails) =>
       transporter = nodemailer.createTransport({
         host: smtpHost,
         port: parseInt(smtpPort.toString(), 10),
-        secure: smtpPort == 465, // true for port 465, false for other ports
+        secure: Number(process.env.SMTP_PORT) === 465, // true for port 465, false for other ports
         auth: {
           user: smtpUser,
           pass: smtpPass,
@@ -171,97 +171,98 @@ export const sendInvoiceEmail = async (recipientEmail, userName, planDetails) =>
 
 /**
  * Sends a region-based 6-digit OTP verification email to the user.
- * Dynamically falls back to Ethereal Mail if no SMTP config is found.
  */
 export const sendOtpEmail = async (recipientEmail, userName, otp) => {
   const smtpHost = process.env.SMTP_HOST;
-  const smtpPort = process.env.SMTP_PORT || 587;
+  const smtpPort = Number(process.env.SMTP_PORT || 465);
   const smtpUser = process.env.SMTP_USER;
   const smtpPass = process.env.SMTP_PASS;
 
-  let transporter;
-  let usingTestAccount = false;
-
   try {
-    if (smtpHost && smtpUser && smtpPass) {
-      transporter = nodemailer.createTransport({
-        host: smtpHost,
-        port: parseInt(smtpPort.toString(), 10),
-        secure: smtpPort == 465,
-        auth: {
-          user: smtpUser,
-          pass: smtpPass,
-        },
-      });
-    } else {
-      const testAccount = await nodemailer.createTestAccount();
-      usingTestAccount = true;
-      transporter = nodemailer.createTransport({
-        host: "smtp.ethereal.email",
-        port: 587,
-        secure: false,
-        auth: {
-          user: testAccount.user,
-          pass: testAccount.pass,
-        },
-      });
-    }
+    console.log("======================================");
+    console.log("Starting OTP Email Service");
+    console.log("SMTP Host:", smtpHost);
+    console.log("SMTP Port:", smtpPort);
+    console.log("SMTP User:", smtpUser);
+    console.log("Recipient:", recipientEmail);
+    console.log("======================================");
+
+    const transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpPort === 465,
+      auth: {
+        user: smtpUser,
+        pass: smtpPass,
+      },
+      connectionTimeout: 60000,
+      greetingTimeout: 60000,
+      socketTimeout: 60000,
+      family: 4, // Force IPv4
+    });
+
+    await transporter.verify();
+    console.log("✅ SMTP Connected Successfully");
 
     const mailOptions = {
-      from: smtpUser ? `"YourTube Security" <${smtpUser}>` : '"YourTube Security" <security@yourtube.com>',
+      from: `"YourTube Security" <${smtpUser}>`,
       to: recipientEmail,
       subject: `Your OTP Verification Code: ${otp}`,
       html: `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8">
-          <title>YourTube OTP Verification</title>
-          <style>
-            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; margin: 0; padding: 0; }
-            .container { max-width: 500px; margin: 40px auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid #e5e7eb; }
-            .header { background: linear-gradient(135deg, #4f46e5, #3730a3); color: #ffffff; padding: 24px; text-align: center; }
-            .header h1 { margin: 0; font-size: 20px; font-weight: 700; }
-            .content { padding: 32px; color: #1f2937; text-align: center; }
-            .otp-code { display: inline-block; font-size: 32px; font-weight: 700; color: #4f46e5; background-color: #f3f4f6; padding: 12px 24px; border-radius: 8px; letter-spacing: 4px; margin: 24px 0; border: 1px dashed #4f46e5; }
-            .footer { background-color: #f9fafb; padding: 16px; text-align: center; font-size: 11px; color: #6b7280; border-top: 1px solid #e5e7eb; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h1>Verification Required</h1>
-            </div>
-            <div class="content">
-              <p>Hi ${userName || "User"},</p>
-              <p>To access YourTube from your location in South India, please use the following 6-digit One-Time Password (OTP) to complete your login. This code is valid for 10 minutes.</p>
-              <div class="otp-code">${otp}</div>
-              <p style="font-size: 13px; color: #6b7280;">If you did not request this, please ignore this email.</p>
-            </div>
-            <div class="footer">
-              <p>&copy; 2026 YourTube Security. All rights reserved.</p>
-            </div>
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>YourTube OTP Verification</title>
+      </head>
+      <body style="font-family: Arial, sans-serif; background:#f3f4f6; padding:20px;">
+        <div style="max-width:500px;margin:auto;background:#fff;border-radius:10px;padding:30px;">
+          <h2 style="color:#4f46e5;">YourTube Verification</h2>
+
+          <p>Hello ${userName || "User"},</p>
+
+          <p>Your OTP code is:</p>
+
+          <div style="
+            font-size:32px;
+            font-weight:bold;
+            text-align:center;
+            padding:15px;
+            margin:20px 0;
+            background:#f5f5f5;
+            border:2px dashed #4f46e5;
+            border-radius:8px;
+            letter-spacing:5px;
+          ">
+            ${otp}
           </div>
-        </body>
-        </html>
+
+          <p>This OTP is valid for 10 minutes.</p>
+
+          <p>If you didn't request this OTP, ignore this email.</p>
+
+          <hr>
+
+          <p style="font-size:12px;color:gray;">
+            © 2026 YourTube Security
+          </p>
+        </div>
+      </body>
+      </html>
       `,
     };
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`OTP verification email sent successfully to ${recipientEmail}. Message ID: ${info.messageId}`);
+    console.log("📧 Sending Email...");
 
-    if (usingTestAccount) {
-      const previewUrl = nodemailer.getTestMessageUrl(info);
-      console.log("\n==================================================");
-      console.log("  OTP TEST EMAIL SENT TO ETHEREAL MAIL");
-      console.log(`  Recipient: ${recipientEmail}`);
-      console.log(`  OTP Code: ${otp}`);
-      console.log(`  Preview URL: ${previewUrl}`);
-      console.log("==================================================\n");
-    }
+    const info = await transporter.sendMail(mailOptions);
+
+    console.log("✅ Email Sent Successfully");
+    console.log("Message ID:", info.messageId);
+
     return info;
   } catch (error) {
-    console.error("Failed to send OTP verification email:", error);
+    console.error("❌ Failed to send OTP verification email");
+    console.error(error);
+    throw error;
   }
 };
-
