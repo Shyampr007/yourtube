@@ -3,29 +3,34 @@ import axiosInstance from "./axiosinstance";
 let videosCache: any[] | null = null;
 let fetchPromise: Promise<any[]> | null = null;
 
-export const getAllVideos = async (bypassCache = false): Promise<any[]> => {
+export const getAllVideos = async (
+  bypassCache = false
+): Promise<any[]> => {
+  // Return cached data if available
   if (videosCache && !bypassCache) {
     return videosCache;
   }
+
+  // Return ongoing request if one exists
   if (fetchPromise && !bypassCache) {
     return fetchPromise;
   }
 
-  fetchPromise = axiosInstance.get("/video/getall")
+  // Start a new request
+  fetchPromise = axiosInstance
+    .get<any[]>("/video/getall")
     .then((res) => {
       videosCache = res.data ?? [];
-      fetchPromise = null;
       return videosCache;
     })
-    .catch((err) => {
+    .finally(() => {
       fetchPromise = null;
-      throw err;
     });
 
   return fetchPromise;
 };
 
-export const clearVideoCache = () => {
+export const clearVideoCache = (): void => {
   videosCache = null;
   fetchPromise = null;
 };
