@@ -71,7 +71,7 @@ export const sendOtp = async (req, res) => {
     if (isSouthIndia) {
       // Fire-and-forget — never block the response on SMTP
       sendOtpEmail(email, user.name || name || "User", otp).catch(err =>
-        console.error("❌ Email delivery failed (non-blocking):", err)
+        console.error("Email delivery failed (non-blocking):", err.message)
       );
       return res.status(200).json({
         success: true,
