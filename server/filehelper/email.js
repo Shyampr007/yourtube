@@ -173,8 +173,8 @@ export const sendInvoiceEmail = async (recipientEmail, userName, planDetails) =>
  * Sends a region-based 6-digit OTP verification email to the user.
  */
 export const sendOtpEmail = async (recipientEmail, userName, otp) => {
-  const smtpHost = process.env.SMTP_HOST;
-  const smtpPort = Number(process.env.SMTP_PORT || 465);
+  const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com";
+  const smtpPort = Number(process.env.SMTP_PORT || 587);
   const smtpUser = process.env.SMTP_USER;
   const smtpPass = process.env.SMTP_PASS;
 
@@ -183,17 +183,29 @@ export const sendOtpEmail = async (recipientEmail, userName, otp) => {
     console.log("Starting OTP Email Service");
     console.log("SMTP Host:", smtpHost);
     console.log("SMTP Port:", smtpPort);
-    console.log("SMTP User:", smtpUser);
+    console.log("SMTP User:", smtpUser ? smtpUser : "NOT SET ❌");
+    console.log("SMTP Pass:", smtpPass ? "SET ✅" : "NOT SET ❌");
     console.log("Recipient:", recipientEmail);
     console.log("======================================");
+
+    if (!smtpUser || !smtpPass) {
+      throw new Error("SMTP_USER or SMTP_PASS environment variable is missing. Please set them in Vercel dashboard.");
+    }
 
     const transporter = nodemailer.createTransport({
       host: smtpHost,
       port: smtpPort,
+      // For port 587: use STARTTLS (secure: false + requireTLS: true)
+      // For port 465: use SSL (secure: true)
       secure: smtpPort === 465,
+      requireTLS: smtpPort === 587,
       auth: {
         user: smtpUser,
         pass: smtpPass,
+      },
+      tls: {
+        // Required for Gmail on some cloud providers (like Vercel/Render)
+        rejectUnauthorized: false,
       },
       connectionTimeout: 60000,
       greetingTimeout: 60000,
