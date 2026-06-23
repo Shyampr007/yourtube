@@ -188,17 +188,11 @@ export const sendOtpEmail = async (recipientEmail, userName, otp) => {
     console.log("======================================");
 
     const transporter = nodemailer.createTransport({
-      host: smtpHost,
-      port: smtpPort,
-      secure: smtpPort === 465,
+      service: "gmail",
       auth: {
-        user: smtpUser,
-        pass: smtpPass,
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
       },
-      connectionTimeout: 60000,
-      greetingTimeout: 60000,
-      socketTimeout: 60000,
-      family: 4, // Force IPv4
     });
 
     await transporter.verify();
