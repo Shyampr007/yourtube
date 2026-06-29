@@ -173,8 +173,8 @@ export const sendInvoiceEmail = async (recipientEmail, userName, planDetails) =>
  * Sends a region-based 6-digit OTP verification email to the user.
  */
 export const sendOtpEmail = async (recipientEmail, userName, otp) => {
-  const smtpHost = process.env.SMTP_HOST;
-  const smtpPort = Number(process.env.SMTP_PORT || 465);
+  const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com";
+  const smtpPort = Number(process.env.SMTP_PORT || 587);
   const smtpUser = process.env.SMTP_USER;
   const smtpPass = process.env.SMTP_PASS;
 
@@ -188,11 +188,17 @@ export const sendOtpEmail = async (recipientEmail, userName, otp) => {
     console.log("======================================");
 
     const transporter = nodemailer.createTransport({
-      service: "gmail",
+      host: smtpHost,
+      port: smtpPort,
+      secure: false, // true only if using port 465
+      requireTLS: true,
+
       auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
+        user: smtpUser,
+        pass: smtpPass,
       },
+
+      family: 4, // Force IPv4 (fixes Render IPv6 ENETUNREACH issue)
     });
 
     await transporter.verify();
@@ -209,53 +215,64 @@ export const sendOtpEmail = async (recipientEmail, userName, otp) => {
         <meta charset="utf-8">
         <title>YourTube OTP Verification</title>
       </head>
-      <body style="font-family: Arial, sans-serif; background:#f3f4f6; padding:20px;">
-        <div style="max-width:500px;margin:auto;background:#fff;border-radius:10px;padding:30px;">
-          <h2 style="color:#4f46e5;">YourTube Verification</h2>
 
-          <p>Hello ${userName || "User"},</p>
+      <body style="font-family:Arial,sans-serif;background:#f3f4f6;padding:20px;">
 
-          <p>Your OTP code is:</p>
+      <div style="max-width:520px;margin:auto;background:white;border-radius:12px;padding:30px;">
 
-          <div style="
-            font-size:32px;
-            font-weight:bold;
-            text-align:center;
-            padding:15px;
-            margin:20px 0;
-            background:#f5f5f5;
-            border:2px dashed #4f46e5;
-            border-radius:8px;
-            letter-spacing:5px;
-          ">
-            ${otp}
-          </div>
+      <h2 style="color:#dc2626;">YourTube Security Verification</h2>
 
-          <p>This OTP is valid for 10 minutes.</p>
+      <p>Hello <b>${userName || "User"}</b>,</p>
 
-          <p>If you didn't request this OTP, ignore this email.</p>
+      <p>Your One-Time Password (OTP) is:</p>
 
-          <hr>
+      <div
+      style="
+      font-size:34px;
+      font-weight:bold;
+      letter-spacing:8px;
+      text-align:center;
+      padding:18px;
+      margin:25px 0;
+      background:#f8fafc;
+      border:2px dashed #dc2626;
+      border-radius:10px;
+      ">
+      ${otp}
+      </div>
 
-          <p style="font-size:12px;color:gray;">
-            © 2026 YourTube Security
-          </p>
-        </div>
+      <p>
+      This OTP will expire in <b>10 minutes</b>.
+      </p>
+
+      <p>
+      If you didn't request this verification,
+      you can safely ignore this email.
+      </p>
+
+      <hr>
+
+      <p style="font-size:12px;color:gray;">
+      © 2026 YourTube Security Team
+      </p>
+
+      </div>
+
       </body>
       </html>
       `,
     };
 
-    console.log("📧 Sending Email...");
+    console.log("📧 Sending OTP Email...");
 
     const info = await transporter.sendMail(mailOptions);
 
-    console.log("✅ Email Sent Successfully");
+    console.log("✅ OTP Email Sent Successfully");
     console.log("Message ID:", info.messageId);
 
     return info;
   } catch (error) {
-    console.error("❌ Failed to send OTP verification email");
+    console.error("❌ OTP Email Failed");
     console.error(error);
     throw error;
   }
