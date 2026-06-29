@@ -46,19 +46,17 @@ export const sendOtp = async (req, res) => {
         if (Array.isArray(ip)) ip = ip[0];
         if (ip && ip.includes(",")) ip = ip.split(",")[0].trim();
         const isLocal = !ip || ["::1", "127.0.0.1", "::ffff:127.0.0.1"].includes(ip);
-        if (!iscLocal) {
+        if (!isLocal) {
           const controller = new AbortController();
           const tid = setTimeout(() => controller.abort(), 5000);
-          const geoRes = await fetch("https://freeipapi.com/api/json");
+          const geoRes = await fetch("https://freeipapi.com/api/json", { signal: controller.signal });
+          clearTimeout(tid);
 
           if (geoRes.ok) {
             const geoData = await geoRes.json();
-
             console.log("Geo Data:", geoData);
-
-            clientRegion = geoData.regionName || "";
-
-            console.log("Detected Region:", clientRegion);
+            region = geoData.regionName || "";
+            console.log("Detected Region:", region);
           }
         }
       } catch (_) { /* silent — geolocation optional */ }

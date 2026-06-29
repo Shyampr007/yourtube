@@ -1,48 +1,134 @@
 import nodemailer from "nodemailer";
 
 /**
+ * Internal helper to send emails via HTTP API (Brevo / Resend) if configured,
+ * otherwise falling back to Nodemailer SMTP.
+ * Bypasses SMTP port blocking on environments like Render.
+ */
+console.log("BREVO_API_KEY exists:", !!process.env.BREVO_API_KEY);
+const sendMailHelper = async (mailOptions) => {
+  let brevoApiKey = process.env.BREVO_API_KEY;
+  const resendApiKey = process.env.RESEND_API_KEY;
+  const smtpHost = process.env.SMTP_HOST || "";
+  const smtpPass = process.env.SMTP_PASS || "";
+
+  // Smart fallback: if Brevo SMTP host is used but no API key is specified,
+  // we use the SMTP password (which is the Brevo API key) to call the REST API over HTTPS.
+  if (!brevoApiKey && smtpHost.includes("brevo") && smtpPass) {
+    console.log("Auto-detecting Brevo SMTP config. Redirecting to HTTPS API to bypass Render port blocks...");
+    brevoApiKey = smtpPass;
+  }
+
+  const senderEmail = process.env.SENDER_EMAIL || process.env.SMTP_USER || "no-reply@yourtube.com";
+  const senderName = process.env.SENDER_NAME || "YourTube Security";
+
+  if (brevoApiKey) {
+    console.log("Using Brevo HTTP API for email delivery (Render compatible)...");
+    const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: {
+        "accept": "application/json",
+        "api-key": brevoApiKey,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        sender: { name: senderName, email: senderEmail },
+        to: [{ email: mailOptions.to }],
+        subject: mailOptions.subject,
+        htmlContent: mailOptions.html,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(`Brevo API error: ${JSON.stringify(errorData)}`);
+    }
+
+    const data = await response.json();
+    return { messageId: data.messageId || "brevo-api-success" };
+  }
+
+  if (resendApiKey) {
+    console.log("Using Resend HTTP API for email delivery (Render compatible)...");
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${resendApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: `${senderName} <${senderEmail}>`,
+        to: [mailOptions.to],
+        subject: mailOptions.subject,
+        html: mailOptions.html,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(`Resend API error: ${JSON.stringify(errorData)}`);
+    }
+
+    const data = await response.json();
+    return { messageId: data.id || "resend-api-success" };
+  }
+
+  // SMTP Configuration
+  const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com";
+  const smtpPort = Number(process.env.SMTP_PORT || 587);
+  const smtpUser = process.env.SMTP_USER;
+  const senderEmail = process.env.SENDER_EMAIL || smtpUser;
+  const smtpPass = process.env.SMTP_PASS;
+
+  if (smtpHost && smtpUser && smtpPass) {
+    console.log("Using SMTP configuration (Nodemailer fallback)...");
+    const transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpPort === 465,
+      auth: {
+        user: smtpUser,
+        pass: smtpPass,
+      },
+      tls: {
+        servername: smtpHost,
+        rejectUnauthorized: false,
+      },
+    });
+    return await transporter.sendMail(mailOptions);
+  }
+
+  // Local Ethereal Mail Fallback
+  console.log("No SMTP or HTTP API keys found. Creating Ethereal test mail account...");
+  const testAccount = await nodemailer.createTestAccount();
+  const transporter = nodemailer.createTransport({
+    host: "smtp.ethereal.email",
+    port: 587,
+    secure: false,
+    auth: {
+      user: testAccount.user,
+      pass: testAccount.pass,
+    },
+  });
+  const info = await transporter.sendMail(mailOptions);
+  const previewUrl = nodemailer.getTestMessageUrl(info);
+  console.log("\n==================================================");
+  console.log("  TEST EMAIL SENT TO ETHEREAL MAIL");
+  console.log(`  Recipient: ${mailOptions.to}`);
+  console.log(`  Preview URL: ${previewUrl}`);
+  console.log("==================================================\n");
+  return info;
+};
+
+/**
  * Sends a transaction confirmation invoice email to the user.
  * Dynamically falls back to Ethereal Mail if no SMTP config is found.
  */
 export const sendInvoiceEmail = async (recipientEmail, userName, planDetails) => {
   const { planType, amount, orderId, transactionId } = planDetails;
-
-  // Read configurations from env, or default to mock fallback behavior
-  const smtpHost = process.env.SMTP_HOST;
-  const smtpPort = process.env.SMTP_PORT || 587;
   const smtpUser = process.env.SMTP_USER;
-  const smtpPass = process.env.SMTP_PASS;
-
-  let transporter;
-  let usingTestAccount = false;
 
   try {
-    if (smtpHost && smtpUser && smtpPass) {
-      console.log("Using custom SMTP configuration for email delivery...");
-      transporter = nodemailer.createTransport({
-        host: smtpHost,
-        port: parseInt(smtpPort.toString(), 10),
-        secure: Number(process.env.SMTP_PORT) === 465, // true for port 465, false for other ports
-        auth: {
-          user: smtpUser,
-          pass: smtpPass,
-        },
-      });
-    } else {
-      console.log("No SMTP configuration found. Creating a temporary Ethereal test mail account...");
-      const testAccount = await nodemailer.createTestAccount();
-      usingTestAccount = true;
-      transporter = nodemailer.createTransport({
-        host: "smtp.ethereal.email",
-        port: 587,
-        secure: false, // true for port 465, false for other ports
-        auth: {
-          user: testAccount.user,
-          pass: testAccount.pass,
-        },
-      });
-    }
-
     const invoiceNumber = "INV-" + Date.now().toString().slice(-6);
     const billingDate = new Date().toLocaleDateString("en-IN", {
       year: "numeric",
@@ -152,17 +238,8 @@ export const sendInvoiceEmail = async (recipientEmail, userName, planDetails) =>
       `,
     };
 
-    const info = await transporter.sendMail(mailOptions);
+    const info = await sendMailHelper(mailOptions);
     console.log(`Invoice email sent successfully to ${recipientEmail}. Message ID: ${info.messageId}`);
-
-    if (usingTestAccount) {
-      const previewUrl = nodemailer.getTestMessageUrl(info);
-      console.log("\n==================================================");
-      console.log("  TEST EMAIL SENT TO ETHEREAL MAIL");
-      console.log(`  Recipient: ${recipientEmail}`);
-      console.log(`  Preview URL: ${previewUrl}`);
-      console.log("==================================================\n");
-    }
     return info;
   } catch (error) {
     console.error("Failed to send transaction confirmation invoice email:", error);
@@ -173,47 +250,16 @@ export const sendInvoiceEmail = async (recipientEmail, userName, planDetails) =>
  * Sends a region-based 6-digit OTP verification email to the user.
  */
 export const sendOtpEmail = async (recipientEmail, userName, otp) => {
-  const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com";
-  const smtpPort = Number(process.env.SMTP_PORT || 587);
   const smtpUser = process.env.SMTP_USER;
-  const smtpPass = process.env.SMTP_PASS;
 
   try {
     console.log("======================================");
     console.log("Starting OTP Email Service");
-    console.log("SMTP Host:", smtpHost);
-    console.log("SMTP Port:", smtpPort);
-    console.log("SMTP User:", smtpUser);
     console.log("Recipient:", recipientEmail);
     console.log("======================================");
 
-    const transporter = nodemailer.createTransport({
-      host: "74.125.24.108",   // Gmail IPv4
-      port: 587,
-      secure: false,
-
-      auth: {
-        user: smtpUser,
-        pass: smtpPass,
-      },
-
-      tls: {
-        servername: "smtp.gmail.com",
-        rejectUnauthorized: false,
-      },
-
-      family: 4,
-
-      connectionTimeout: 60000,
-      greetingTimeout: 60000,
-      socketTimeout: 60000,
-    });
-
-
-    console.log("✅ SMTP Connected Successfully");
-
     const mailOptions = {
-      from: `"YourTube Security" <${smtpUser}>`,
+      from: smtpUser ? `"YourTube Security" <${smtpUser}>` : '"YourTube Security" <security@yourtube.com>',
       to: recipientEmail,
       subject: `Your OTP Verification Code: ${otp}`,
       html: `
@@ -272,12 +318,9 @@ export const sendOtpEmail = async (recipientEmail, userName, otp) => {
     };
 
     console.log("📧 Sending OTP Email...");
-
-    const info = await transporter.sendMail(mailOptions);
-
+    const info = await sendMailHelper(mailOptions);
     console.log("✅ OTP Email Sent Successfully");
     console.log("Message ID:", info.messageId);
-
     return info;
   } catch (error) {
     console.error("❌ OTP Email Failed");
