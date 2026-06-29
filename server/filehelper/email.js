@@ -74,16 +74,14 @@ const sendMailHelper = async (mailOptions) => {
   }
 
   // SMTP Configuration
-  const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com";
+  const fallbackHost = smtpHost || "smtp.gmail.com";
   const smtpPort = Number(process.env.SMTP_PORT || 587);
   const smtpUser = process.env.SMTP_USER;
-  const senderEmail = process.env.SENDER_EMAIL || smtpUser;
-  const smtpPass = process.env.SMTP_PASS;
 
-  if (smtpHost && smtpUser && smtpPass) {
+  if (fallbackHost && smtpUser && smtpPass) {
     console.log("Using SMTP configuration (Nodemailer fallback)...");
     const transporter = nodemailer.createTransport({
-      host: smtpHost,
+      host: fallbackHost,
       port: smtpPort,
       secure: smtpPort === 465,
       auth: {
@@ -91,7 +89,7 @@ const sendMailHelper = async (mailOptions) => {
         pass: smtpPass,
       },
       tls: {
-        servername: smtpHost,
+        servername: fallbackHost,
         rejectUnauthorized: false,
       },
     });
