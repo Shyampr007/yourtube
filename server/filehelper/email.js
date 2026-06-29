@@ -188,20 +188,26 @@ export const sendOtpEmail = async (recipientEmail, userName, otp) => {
     console.log("======================================");
 
     const transporter = nodemailer.createTransport({
-      host: smtpHost,
-      port: smtpPort,
-      secure: false, // true only if using port 465
-      requireTLS: true,
+      host: "smtp.gmail.com",
+      port: 465,
+      secure: true,
 
       auth: {
         user: smtpUser,
         pass: smtpPass,
       },
 
-      family: 4, // Force IPv4 (fixes Render IPv6 ENETUNREACH issue)
+      tls: {
+        rejectUnauthorized: false,
+        family: 4,
+      },
+
+      connectionTimeout: 30000,
+      greetingTimeout: 30000,
+      socketTimeout: 30000,
     });
 
-    await transporter.verify();
+
     console.log("✅ SMTP Connected Successfully");
 
     const mailOptions = {
