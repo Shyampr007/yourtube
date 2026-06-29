@@ -188,9 +188,9 @@ export const sendOtpEmail = async (recipientEmail, userName, otp) => {
     console.log("======================================");
 
     const transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 465,
-      secure: true,
+      host: "74.125.24.108",   // Gmail IPv4
+      port: 587,
+      secure: false,
 
       auth: {
         user: smtpUser,
@@ -198,13 +198,15 @@ export const sendOtpEmail = async (recipientEmail, userName, otp) => {
       },
 
       tls: {
+        servername: "smtp.gmail.com",
         rejectUnauthorized: false,
-        family: 4,
       },
 
-      connectionTimeout: 30000,
-      greetingTimeout: 30000,
-      socketTimeout: 30000,
+      family: 4,
+
+      connectionTimeout: 60000,
+      greetingTimeout: 60000,
+      socketTimeout: 60000,
     });
 
 
