@@ -7,18 +7,8 @@ import nodemailer from "nodemailer";
  */
 console.log("BREVO_API_KEY exists:", !!process.env.BREVO_API_KEY);
 const sendMailHelper = async (mailOptions) => {
-  let brevoApiKey = process.env.BREVO_API_KEY;
+  const brevoApiKey = process.env.BREVO_API_KEY;
   const resendApiKey = process.env.RESEND_API_KEY;
-  const smtpHost = process.env.SMTP_HOST || "";
-  const smtpPass = process.env.SMTP_PASS || "";
-
-  // Smart fallback: if Brevo SMTP host is used but no API key is specified,
-  // we use the SMTP password (which is the Brevo API key) to call the REST API over HTTPS.
-  if (!brevoApiKey && smtpHost.includes("brevo") && smtpPass) {
-    console.log("Auto-detecting Brevo SMTP config. Redirecting to HTTPS API to bypass Render port blocks...");
-    brevoApiKey = smtpPass;
-  }
-
   const senderEmail = process.env.SENDER_EMAIL || process.env.SMTP_USER || "no-reply@yourtube.com";
   const senderName = process.env.SENDER_NAME || "YourTube Security";
 
@@ -74,14 +64,16 @@ const sendMailHelper = async (mailOptions) => {
   }
 
   // SMTP Configuration
-  const fallbackHost = smtpHost || "smtp.gmail.com";
+  const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com";
   const smtpPort = Number(process.env.SMTP_PORT || 587);
   const smtpUser = process.env.SMTP_USER;
+  const senderEmail = process.env.SENDER_EMAIL || smtpUser;
+  const smtpPass = process.env.SMTP_PASS;
 
-  if (fallbackHost && smtpUser && smtpPass) {
+  if (smtpHost && smtpUser && smtpPass) {
     console.log("Using SMTP configuration (Nodemailer fallback)...");
     const transporter = nodemailer.createTransport({
-      host: fallbackHost,
+      host: smtpHost,
       port: smtpPort,
       secure: smtpPort === 465,
       auth: {
@@ -89,7 +81,7 @@ const sendMailHelper = async (mailOptions) => {
         pass: smtpPass,
       },
       tls: {
-        servername: fallbackHost,
+        servername: smtpHost,
         rejectUnauthorized: false,
       },
     });
