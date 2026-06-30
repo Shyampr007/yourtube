@@ -73,21 +73,60 @@ export const UserProvider = ({ children }) => {
     };
   }, []);
 
+  const getBrowserRegion = async () => {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) {
+        resolve(null);
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          try {
+            const { latitude, longitude } = position.coords;
+            const geoRes = await fetch(
+              `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
+            );
+            if (geoRes.ok) {
+              const geoData = await geoRes.json();
+              resolve(geoData.principalSubdivision || null);
+            } else {
+              resolve(null);
+            }
+          } catch (e) {
+            resolve(null);
+          }
+        },
+        (error) => {
+          resolve(null);
+        },
+        { timeout: 5000 }
+      );
+    });
+  };
+
   const triggerOtpFlow = async (payload) => {
     try {
-      // Detect client region for South India email vs SMS routing
+      // Detect client region: prefer HTML5 Geolocation API, fallback to IP detection
       let clientRegion = "";
       try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
-        const geoRes = await fetch("https://freeipapi.com/api/json", { signal: controller.signal });
-        clearTimeout(timeoutId);
-        if (geoRes.ok) {
-          const geoData = await geoRes.json();
-          clientRegion = geoData.regionName || "";
-        }
+        clientRegion = await getBrowserRegion();
       } catch (e) {
-        console.warn("Client geolocation failed, server will determine region from IP.");
+        console.warn("Browser native geolocation failed:", e);
+      }
+
+      if (!clientRegion) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 5000);
+          const geoRes = await fetch("https://freeipapi.com/api/json", { signal: controller.signal });
+          clearTimeout(timeoutId);
+          if (geoRes.ok) {
+            const geoData = await geoRes.json();
+            clientRegion = geoData.regionName || "";
+          }
+        } catch (e) {
+          console.warn("Client IP geolocation failed, server will determine region from IP.");
+        }
       }
 
       const response = await axiosInstance.post("/user/send-otp", { ...payload, clientRegion });
@@ -179,15 +218,23 @@ export const UserProvider = ({ children }) => {
       // Re-detect region so routing stays correct on resend
       let clientRegion = "";
       try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
-        const geoRes = await fetch("https://freeipapi.com/api/json", { signal: controller.signal });
-        clearTimeout(timeoutId);
-        if (geoRes.ok) {
-          const geoData = await geoRes.json();
-          clientRegion = geoData.regionName || "";
-        }
-      } catch (e) { /* silent */ }
+        clientRegion = await getBrowserRegion();
+      } catch (e) {
+        console.warn("Browser native geolocation failed:", e);
+      }
+
+      if (!clientRegion) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 5000);
+          const geoRes = await fetch("https://freeipapi.com/api/json", { signal: controller.signal });
+          clearTimeout(timeoutId);
+          if (geoRes.ok) {
+            const geoData = await geoRes.json();
+            clientRegion = geoData.regionName || "";
+          }
+        } catch (e) { /* silent */ }
+      }
 
       const response = await axiosInstance.post("/user/send-otp", {
         email: otpData.email,

@@ -22,6 +22,7 @@ import paymentroutes from "./routes/payment.js";
 import videoModal from "./Modals/video.js";
 dotenv.config();
 const app = express();
+app.set("trust proxy", true);
 
 // ── CORS: allow dev origins + any deployed frontend URL ──────────────────────
 app.use(
