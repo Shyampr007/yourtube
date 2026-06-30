@@ -1,5 +1,7 @@
 import nodemailer from "nodemailer";
 
+let cachedEtherealTransporter = null;
+
 /**
  * Internal helper to send emails via HTTP API (Brevo / Resend) if configured,
  * otherwise falling back to Nodemailer SMTP.
@@ -88,18 +90,20 @@ const sendMailHelper = async (mailOptions) => {
   }
 
   // Local Ethereal Mail Fallback
-  console.log("No SMTP or HTTP API keys found. Creating Ethereal test mail account...");
-  const testAccount = await nodemailer.createTestAccount();
-  const transporter = nodemailer.createTransport({
-    host: "smtp.ethereal.email",
-    port: 587,
-    secure: false,
-    auth: {
-      user: testAccount.user,
-      pass: testAccount.pass,
-    },
-  });
-  const info = await transporter.sendMail(mailOptions);
+  console.log("No SMTP or HTTP API keys found. Creating/using cached Ethereal test mail account...");
+  if (!cachedEtherealTransporter) {
+    const testAccount = await nodemailer.createTestAccount();
+    cachedEtherealTransporter = nodemailer.createTransport({
+      host: "smtp.ethereal.email",
+      port: 587,
+      secure: false,
+      auth: {
+        user: testAccount.user,
+        pass: testAccount.pass,
+      },
+    });
+  }
+  const info = await cachedEtherealTransporter.sendMail(mailOptions);
   const previewUrl = nodemailer.getTestMessageUrl(info);
   console.log("\n==================================================");
   console.log("  TEST EMAIL SENT TO ETHEREAL MAIL");
